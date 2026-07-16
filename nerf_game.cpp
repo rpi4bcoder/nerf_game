@@ -2,6 +2,8 @@
 #include <vector>
 #include <iostream>
 #include <array>
+#include <string>
+#include <random>
 
 int main() {
     sf::RenderWindow window(sf::VideoMode(1100, 1000), "Nerf Game");
@@ -30,8 +32,9 @@ int main() {
 
     std::vector<sf::RectangleShape> bullets;
 
-    std::array<std::array<int, 2>, 9> starting_enemy_positons = {{{110, 25}, {220, 25}, {330, 25}, {440, 25}, {550, 25}, {660, 25}, {770, 25}, {880, 25}, {990, 25}}};
+    std::array<std::array<int, 2>, 10> starting_enemy_positons = {{{-100, -100}, {110, 25}, {220, 25}, {330, 25}, {440, 25}, {550, 25}, {660, 25}, {770, 25}, {880, 25}, {990, 25}}};
     std::vector<sf::RectangleShape> enemies;
+    std::vector<int> enemieshp = {20, 20, 20, 20, 20, 20, 20, 20, 30, 40};
     int espeed = pspeed-1;
 
     sf::Font mainfont;
@@ -42,7 +45,7 @@ int main() {
     cooldowntext.setString("COOLDOWN");
 
     for (std::array<int, 2> pos : starting_enemy_positons) {
-        sf::RectangleShape newEnemy(sf::Vector2f(30 ,30));
+        sf::RectangleShape newEnemy(sf::Vector2f(30, 30));
         newEnemy.setOrigin(20, 20);
         newEnemy.setPosition(pos[0], pos[1]);
         newEnemy.setFillColor(sf::Color::Red);
@@ -161,27 +164,52 @@ int main() {
             for (int ei = static_cast<int>(enemies.size()) - 1; ei >= 0; --ei) {
                 bool erased = false;
                 for (int bi = static_cast<int>(bullets.size()) - 1; bi >= 0; --bi) {
-                    if (enemies[ei].getGlobalBounds().intersects(bullets[bi].getGlobalBounds())) {
+                    if (ei < static_cast<int>(enemies.size()) && enemies[ei].getGlobalBounds().intersects(bullets[bi].getGlobalBounds())) {
                         bullets.erase(bullets.begin() + bi);
-                        enemies.erase(enemies.begin() + ei);
-                        erased = true;
+                        enemieshp[ei] -= 10;
+                        if (enemieshp[ei] <= 0) {
+                            enemies.erase(enemies.begin() + ei);
+                            enemieshp.erase(enemieshp.begin() + ei);
+                            // If killing the second-last real enemy leaves only the off-screen placeholder,
+                            // also remove that placeholder so the win condition triggers.
+                            if (enemies.size() == 1) {
+                                sf::Vector2f pos = enemies[0].getPosition();
+                                if (pos.x < 0 || pos.y < 0) {
+                                    enemies.erase(enemies.begin());
+                                    enemieshp.erase(enemieshp.begin());
+                                }
+                            }
+                            erased = true;
+                        }
                         break;
                     }
                 }
-                if (!erased) {
+                if (!erased && ei < static_cast<int>(enemies.size()) && ei > 0) {
                     // AI
                     // Get the actual enemy for less repeating
                     sf::RectangleShape &e = enemies[ei];
                     int xtomove = player.getPosition().x - e.getPosition().x;
                     int ytomove = player.getPosition().y - e.getPosition().y;
+
+                    std::random_device rd;
+
+                    std::mt19937 gen(rd());
+
+                    std::uniform_int_distribution<int> distrib(-2, 2);
                     if (xtomove != 0) {
-                        if (xtomove > 0) e.move(espeed, 0);
-                        else e.move((espeed)*-1, 0);
+                        if (xtomove > 0) e.move(espeed+distrib(gen), 0);
+                        else e.move((espeed)*-1+distrib(gen), 0);
                     }
                     if (ytomove != 0) { 
-                        if (ytomove > 0) e.move(0, espeed);
-                        else e.move(0, (espeed) *-1);
+                        if (ytomove > 0) e.move(0, espeed+distrib(gen));
+                        else e.move(0, (espeed) *-1 + distrib(gen));
                     }
+                    sf::Text hptext;
+                    hptext.setFont(mainfont);
+                    hptext.setFillColor(sf::Color(255, 117, 0));
+                    hptext.setCharacterSize(10);
+                    hptext.setPosition(e.getPosition().x - 15, (e.getPosition().y - e.getLocalBounds().height / 2.f) - 20);
+                    hptext.setString(std::to_string(enemieshp[ei]));
                     // Check if player has been touched by enemy
                     if (e.getGlobalBounds().intersects(player.getGlobalBounds())) {
                         // Game over
@@ -189,6 +217,7 @@ int main() {
                         window.close();
                     }
                     window.draw(e);
+                    window.draw(hptext);
                 }
             }
         } else {
